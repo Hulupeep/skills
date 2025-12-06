@@ -1,117 +1,118 @@
-# Issue-First Dev Loop: Usage Guide
+# Issue-First Dev Loop
+
+A Claude Code skill that enforces structured development workflow: **Issue → Plan → Code**.
+
+## The Problem
+
+When you report a bug or request a change, LLMs immediately suggest code fixes. This leads to:
+- No traceability of what was changed and why
+- Scope creep and unintended side effects
+- Fixes that address symptoms, not root causes
+- No documentation for future reference
+
+## The Solution
+
+This skill forces a deterministic workflow:
+
+1. **Phase 1: Issue Draft** - Structured problem statement (no code)
+2. **Phase 2: Change Plan** - Explicit scope and invariants (still no code)
+3. **Phase 3: Implementation** - Code only after approval
 
 ## Installation
 
-1. Download `issue-first-dev-loop.skill`
-2. In Claude Code settings, add the skill to your skills directory
-3. The skill auto-triggers on development keywords
+```bash
+cp -r issue-first-dev-loop ~/.claude/skills/
+```
 
-## The Experience
+The skill auto-triggers on development keywords.
+
+## Usage
+
+Just describe your bug or change request naturally:
+
+```
+"The auth flow is broken, users can't log in after password reset"
+```
+
+Instead of immediately suggesting code, Claude will:
+
+1. Draft a structured issue with reproduction steps, hypothesis, and acceptance criteria
+2. Wait for your approval
+3. Create a change plan listing files to modify and invariants to preserve
+4. Wait for your approval
+5. Only then implement the fix
+
+## Example Flow
 
 ### Before (Chaotic)
 
 ```
-You: "The TabStax extension is binding to current window instead of all windows, 
-      here's the log output... [paste]"
+You: "The extension is binding to current window instead of all windows"
 
-Claude Code: "I see the issue! Try changing line 47 in background.js from 
-              chrome.windows.getCurrent to chrome.windows.getAll..."
+Claude: "Try changing line 47 from getCurrent to getAll..."
 ```
 
-↑ This immediately proposes code. No traceability. No plan. Silent mutation.
+No traceability. No plan.
 
 ### After (Deterministic)
 
 ```
-You: "The TabStax extension is binding to current window instead of all windows, 
-      here's the log output... [paste]"
+You: "The extension is binding to current window instead of all windows"
 
-Claude (Issue Agent): 
+Claude:
 
 ## Issue Draft
 
-**Title:** TabStax binds to current window instead of all windows
-
-**Context:**
-- Project: TabStax
-- Component: Window binding logic
+**Title:** Extension binds to current window instead of all windows
 
 **Reproduction:**
-1. Open multiple Chrome windows
-2. Activate TabStax
-3. Observe: Only current window's tabs are tracked
+1. Open multiple windows
+2. Activate extension
+3. Only current window tracked
 
-**Expected:** All windows should be monitored
-**Actual:** Only current window monitored
-
-**Evidence:**
-> [quotes your log showing getCurrent call]
-
-**Hypothesis:** `chrome.windows.getCurrent()` in background.js returns only active 
-window. Should use `chrome.windows.getAll()` with callback iteration.
+**Hypothesis:** getCurrent() returns only active window
 
 **Acceptance Criteria:**
-- [ ] Extension monitors all open windows
-- [ ] Tab changes in any window trigger updates
-- [ ] No regression in current window functionality
+- [ ] All windows monitored
+- [ ] No regression in single-window use
 
 ---
-Approve, edit, or "push to GitHub as project:tabstax label:bug"
+Approve or edit this issue.
 ```
 
-You: "Approved, implement it"
+You: "Approved"
 
 ```
-Claude (Issue Agent):
+Claude:
 
-## Change Plan: TabStax binds to current window instead of all windows
+## Change Plan
 
-**Issue Reference:** (pending GitHub push)
+**Files to modify:**
+- background.js — Change window fetching logic
 
-### Files to Modify
+**Files NOT to touch:**
+- popup.js — UI layer
 
-| File | Change Type | Description |
-|------|-------------|-------------|
-| `background.js` | Modify | Change window fetching logic |
-| `tests/window-binding.test.js` | Add | Test multi-window scenarios |
-
-### Files Explicitly OUT of Scope
-- `popup.js` — UI layer, not relevant
-- `manifest.json` — No permission changes needed
-
-### Invariants
-1. **Single-window still works**: Users with one window see no change
-2. **Tab event listeners**: Existing tab listeners remain functional
-3. **Storage format**: Saved stax format unchanged
-
-### Test Plan
-- [ ] `test_multi_window_detection` — Opens 3 windows, verifies all monitored
-- [ ] `test_single_window_unchanged` — Existing behavior preserved
-- [ ] `test_tab_events_across_windows` — Tab changes in any window fire events
-
-### Risk Assessment
-| Risk | Likelihood | Mitigation |
-|------|------------|------------|
-| Performance with many windows | Low | Lazy evaluation of window list |
+**Invariants:**
+- Single-window still works
+- Storage format unchanged
 
 ---
-Approve this plan to begin implementation.
+Approve to implement.
 ```
 
 You: "Go"
 
 ```
-Claude (Coder Agent):
-
-Implementing Issue: TabStax window binding
-Following approved plan.
-Scope: background.js, tests/window-binding.test.js
-
-[Code implementation follows]
-[Tests added]
-
-PR ready. References: TabStax Window Binding Issue
+Claude: [Implements fix within approved scope]
 ```
+
+## Trigger Phrases
+
+- "bug", "there's a bug", "found a bug"
+- "fix this", "change this", "refactor"
+- "broken", "not working", "error in"
+- Any complaint + evidence (logs, screenshots)
 
 ## Key Behaviors
 
@@ -121,21 +122,15 @@ PR ready. References: TabStax Window Binding Issue
 | "Fix this" | Issue draft (NO code) |
 | "Just fix it quickly" | **Still** issue draft first |
 | "Approved" | Change plan (NO code) |
-| "Plan approved, implement" | Code implementation |
+| "Plan approved" | Code implementation |
 
-## Integration with Your Stack
+## Integration
 
-### chat2repo
-The issue markdown can be pushed directly:
-```
-"Push this issue to GitHub as project:tabstax label:bug priority:high"
-```
+### GitHub Issues
+Copy the issue draft markdown directly into a GitHub issue.
 
-### GitHub Actions
-Issue file → Action parses → Real GitHub Issue created → Coder agent triggered
-
-### PR Workflow
-Change plan becomes PR description template with:
+### Pull Requests
+Change plan becomes PR description with:
 - Issue reference
 - Files modified (matches scope)
 - Test coverage
@@ -145,14 +140,22 @@ Change plan becomes PR description template with:
 
 1. **Be messy in your input** — The skill extracts structure from chaos
 2. **Include logs/errors** — More evidence = better hypothesis
-3. **Edit the issue draft** — It's collaborative, not prescriptive
+3. **Edit the issue draft** — It's collaborative
 4. **Trust the phases** — Skipping to code is the old way
 
-## Override (Emergency Only)
+## Override
 
-If you truly need to skip the workflow:
+If you truly need to skip:
+
 ```
-"SKIP ISSUE WORKFLOW: [your request]"
+SKIP ISSUE WORKFLOW: [your request]
 ```
 
-This bypasses the skill. Use sparingly — you lose traceability.
+Use sparingly — you lose traceability.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `issue-first-dev-loop/SKILL.md` | Main skill definition |
+| `issue-first-dev-loop-system-prompt.md` | Standalone system prompt |
